@@ -11,6 +11,7 @@ class BInline(NestedStackedInline):
     inlines = [CInline,]
     
 class AAdmin(NestedModelAdmin):
+    save_as = True
     inlines = [BInline,]
 
 admin.site.register(A, AAdmin)
