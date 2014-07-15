@@ -1,2 +1,2 @@
 include README.md
-recursive-include nested_inlines/static		admin/css/*
+recursive-include nested_inlines/static		*
