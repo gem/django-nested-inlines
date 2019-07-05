@@ -76,10 +76,11 @@ class NestedModelAdmin(ModelAdmin):
                     nested_formset = InlineFormSet(request.POST, request.FILES,
                                                    save_as_new="_saveasnew" in request.POST,
                                                    instance=form.instance,
-                                                   prefix=prefix, queryset=nested_inline.queryset(request))
+                                                   prefix=prefix,
+queryset=nested_inline.get_queryset(request))
                 else:
                     nested_formset = InlineFormSet(instance=form.instance,
-                                                   prefix=prefix, queryset=nested_inline.queryset(request))
+                                                   prefix=prefix, queryset=nested_inline.get_queryset(request))
                 nested_formsets.append(nested_formset)
                 if nested_inline.inlines:
                     self.add_nested_inline_formsets(request, nested_inline, nested_formset, depth=depth+1)
@@ -130,8 +131,8 @@ class NestedModelAdmin(ModelAdmin):
         return True
     
     @csrf_protect_m
-    @transaction.commit_on_success
-    def add_view(self, request, form_url='', extra_context=None):
+    @transaction.atomic
+    def add_view_old(self, request, form_url='', extra_context=None):
         "The 'add' admin view for this model."
         model = self.model
         opts = model._meta
@@ -159,7 +160,7 @@ class NestedModelAdmin(ModelAdmin):
                 formset = FormSet(data=request.POST, files=request.FILES,
                                   instance=new_object,
                                   save_as_new="_saveasnew" in request.POST,
-                                  prefix=prefix, queryset=inline.queryset(request))
+                                  prefix=prefix, queryset=inline.get_queryset(request))
                 formsets.append(formset)
                 if inline.inlines:
                     self.add_nested_inline_formsets(request, inline, formset)
@@ -187,7 +188,7 @@ class NestedModelAdmin(ModelAdmin):
                 if prefixes[prefix] != 1 or not prefix:
                     prefix = "%s-%s" % (prefix, prefixes[prefix])
                 formset = FormSet(instance=self.model(), prefix=prefix,
-                                  queryset=inline.queryset(request))
+                                  queryset=inline.get_queryset(request))
                 formsets.append(formset)
                 if inline.inlines:
                     self.add_nested_inline_formsets(request, inline, formset)
@@ -225,8 +226,8 @@ class NestedModelAdmin(ModelAdmin):
         return self.render_change_form(request, context, form_url=form_url, add=True)
 
     @csrf_protect_m
-    @transaction.commit_on_success
-    def change_view(self, request, object_id, form_url='', extra_context=None):
+    @transaction.atomic
+    def change_view_old(self, request, object_id, form_url='', extra_context=None):
         "The 'change' admin view for this model."
         model = self.model
         opts = model._meta
@@ -263,7 +264,7 @@ class NestedModelAdmin(ModelAdmin):
                     prefix = "%s-%s" % (prefix, prefixes[prefix])
                 formset = FormSet(request.POST, request.FILES,
                                   instance=new_object, prefix=prefix,
-                                  queryset=inline.queryset(request))
+                                  queryset=inline.get_queryset(request))
                 formsets.append(formset)
                 if inline.inlines:
                     self.add_nested_inline_formsets(request, inline, formset)
@@ -284,7 +285,7 @@ class NestedModelAdmin(ModelAdmin):
                 if prefixes[prefix] != 1 or not prefix:
                     prefix = "%s-%s" % (prefix, prefixes[prefix])
                 formset = FormSet(instance=obj, prefix=prefix,
-                                  queryset=inline.queryset(request))
+                                  queryset=inline.get_queryset(request))
                 formsets.append(formset)
                 if inline.inlines:
                     self.add_nested_inline_formsets(request, inline, formset)
@@ -321,6 +322,141 @@ class NestedModelAdmin(ModelAdmin):
         }
         context.update(extra_context or {})
         return self.render_change_form(request, context, change=True, obj=obj, form_url=form_url)
+
+    def _create_formsets(self, request, obj, change):
+        "Helper function to generate formsets for add/change_view."
+        formsets = []
+        inline_instances = []
+        prefixes = {}
+        get_formsets_args = [request]
+        if change:
+            get_formsets_args.append(obj)
+        for FormSet, inline in self.get_formsets_with_inlines(*get_formsets_args):
+            prefix = FormSet.get_default_prefix()
+            prefixes[prefix] = prefixes.get(prefix, 0) + 1
+            if prefixes[prefix] != 1 or not prefix:
+                prefix = "%s-%s" % (prefix, prefixes[prefix])
+            formset_params = {
+                'instance': obj,
+                'prefix': prefix,
+                'queryset': inline.get_queryset(request),
+            }
+            if request.method == 'POST':
+                formset_params.update({
+                    'data': request.POST,
+                    'files': request.FILES,
+                    'save_as_new': '_saveasnew' in request.POST
+                })
+            formset = FormSet(**formset_params)
+            formsets.append(formset)
+            inline_instances.append(inline)
+            if inline.inlines:
+                self.add_nested_inline_formsets(request, inline, formset)
+        return formsets, inline_instances
+
+
+    @csrf_protect_m
+    @transaction.atomic
+    def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
+
+        to_field = request.POST.get(TO_FIELD_VAR, request.GET.get(TO_FIELD_VAR))
+        if to_field and not self.to_field_allowed(request, to_field):
+            raise DisallowedModelAdminToField("The field %s cannot be referenced." % to_field)
+
+        model = self.model
+        opts = model._meta
+        add = object_id is None
+
+        if add:
+            if not self.has_add_permission(request):
+                raise PermissionDenied
+            obj = None
+
+        else:
+            obj = self.get_object(request, unquote(object_id), to_field)
+
+            if not self.has_change_permission(request, obj):
+                raise PermissionDenied
+
+            if obj is None:
+                raise Http404(_('%(name)s object with primary key %(key)r does not exist.') % {
+                    'name': force_unicode(opts.verbose_name), 'key': escape(object_id)})
+
+            if request.method == 'POST' and "_saveasnew" in request.POST:
+                return self.add_view(request, form_url=reverse('admin:%s_%s_add' % (
+                    opts.app_label, opts.model_name),
+                    current_app=self.admin_site.name))
+
+        ModelForm = self.get_form(request, obj)
+        if request.method == 'POST':
+            form = ModelForm(request.POST, request.FILES, instance=obj)
+            if form.is_valid():
+                form_validated = True
+                new_object = self.save_form(request, form, change=not add)
+            else:
+                form_validated = False
+                new_object = form.instance
+            formsets, inline_instances = self._create_formsets(request, new_object, change=not add)
+            # if all_valid(formsets) and form_validated:
+            if (self.all_valid_with_nesting(formsets) and form_validated
+                and self.is_cross_valid(form, formsets)):
+                self.save_model(request, new_object, form, not add)
+                self.save_related(request, form, formsets, not add)
+                if add:
+                    self.log_addition(request, new_object)
+                    return self.response_add(request, new_object)
+                else:
+                    change_message = self.construct_change_message(request, form, formsets)
+                    self.log_change(request, new_object, change_message)
+                    return self.response_change(request, new_object)
+        else:
+            if add:
+                initial = self.get_changeform_initial_data(request)
+                form = ModelForm(initial=initial)
+                formsets, inline_instances = self._create_formsets(request, self.model(), change=False)
+            else:
+                form = ModelForm(instance=obj)
+                formsets, inline_instances = self._create_formsets(request, obj, change=True)
+
+        adminForm = helpers.AdminForm(
+            form,
+            list(self.get_fieldsets(request, obj)),
+            self.get_prepopulated_fields(request, obj),
+            self.get_readonly_fields(request, obj),
+            model_admin=self)
+        media = self.media + adminForm.media
+
+        inline_formsets = self.get_inline_formsets(request, formsets, inline_instances, obj)
+        for inline_formset in inline_formsets:
+            media = media + inline_formset.media
+            if inline.inlines:
+                media = media + self.wrap_nested_inline_formsets(
+                    request, inline, formset)
+
+        context = dict(self.admin_site.each_context(request),
+            title=(_('Add %s') if add else _('Change %s')) % force_unicode(opts.verbose_name),
+            adminform=adminForm,
+            object_id=object_id,
+            original=obj,
+            is_popup=(IS_POPUP_VAR in request.POST or
+                      IS_POPUP_VAR in request.GET),
+            to_field=to_field,
+            media=media,
+            inline_admin_formsets=inline_formsets,
+            errors=helpers.AdminErrorList(form, formsets),
+            preserved_filters=self.get_preserved_filters(request),
+            django_version_lt_1_6=DJANGO_VERSION < (1, 6)
+        )
+        if add:
+            context['show_delete'] = False
+
+        context.update(extra_context or {})
+
+        return self.render_change_form(request, context, add=add, change=not add, obj=obj, form_url=form_url)
+
+    def add_view(self, request, form_url='', extra_context=None):
+        return self.changeform_view(request, None, form_url, extra_context)
+
 
 class NestedInlineModelAdmin(InlineModelAdmin):
     inlines = []
