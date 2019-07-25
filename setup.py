@@ -28,7 +28,7 @@ setup(
     ],
     # packages=find_packages(exclude=['tests']),
     packages=['.', 'nested_inlines'],
-    package_data={'nested_inlines' : ['README.md',
+    package_data={'nested_inlines' : ['README.md', 'setup.py',
                                       'templates/admin/edit_inline/*.html',
                                       'static/admin/css/*.css',
                                       'static/admin/js/*.js']},
