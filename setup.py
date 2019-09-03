@@ -7,7 +7,7 @@ github_url = 'https://github.com/silverfix/django-nested-inlines'
 long_desc = open('README.md').read()
 
 setup(
-    name='dj-nested-inlines',
+    name='django-nested-inlines',
     version='.'.join(str(v) for v in __version__),
     description='Adds nested inline support in Django admin',
     long_description=long_desc,
