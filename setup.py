@@ -14,7 +14,6 @@ setup(
     url=github_url,
     author='Andrea Rabbaglietti',
     author_email='silverfix@gmail.com',
-    packages=find_packages(exclude=['tests']),
     include_package_data=True,
     license='MIT License',
     classifiers=[
@@ -27,7 +26,10 @@ setup(
         'Programming Language :: Python',
         'Topic :: Software Development :: Libraries :: Python Modules'
     ],
-    package_data={'nested_inlines' : ['templates/admin/edit_inline/*.html',
+    # packages=find_packages(exclude=['tests']),
+    packages=['.', 'nested_inlines'],
+    package_data={'nested_inlines' : ['README.md', 'setup.py',
+                                      'templates/admin/edit_inline/*.html',
                                       'static/admin/css/*.css',
                                       'static/admin/js/*.js']},
 )
