@@ -24,7 +24,13 @@ it!
 
 ## Installation
 
-`pip install -e git+git://github.com/silverfix/django-nested-inlines.git#egg=django-nested-inlines`
+Uninstall django-nested-inlines if you install this package from other repository
+
+`pip uninstall django-nested-inlines`
+
+and install dj-nested-inlines
+
+`pip install dj-nested-inlines`
 
 ## Usage
 

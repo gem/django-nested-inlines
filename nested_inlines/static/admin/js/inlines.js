@@ -20,7 +20,7 @@
 		var $this = $(this);
 		var $parent = $this.parent();
 		var nextIndex = get_no_forms(options.prefix);
-		
+
 		//store the options. This is needed for nested inlines, to recreate the same form
 		var group = $this.closest('.inline-group');
 		group.data('django_formset', options);
@@ -29,10 +29,10 @@
 		$this.each(function(i) {
 			$(this).not("." + options.emptyCssClass).addClass(options.formCssClass);
 		});
-		
+
 		if (isAddButtonVisible(options)) {
 			var addButton;
-			if ($this.attr("tagName") == "TR") {
+			if ($this.attr("tagName") == "TR" || $this.prop("tagName") == "TR") {
 				// If forms are laid out as table rows, insert the
 				// "add" button in a new table row:
 				var numCols = this.eq(-1).children().length;
@@ -63,7 +63,7 @@
 		added : null, // Function called each time a new form is added
 		removed : null // Function called each time a form is deleted
 	};
-	
+
 	// Tabular inlines ---------------------------------------------------------
 	$.fn.tabularFormset = function(options) {
 		var $rows = $(this);
@@ -105,7 +105,10 @@
 
 		var initPrepopulatedFields = function(row) {
 			row.find('.prepopulated_field').each(function() {
-				var field = $(this), input = field.find('input, select, textarea'), dependency_list = input.data('dependency_list') || [], dependencies = [];
+				var field = $(this),
+					input = field.find('input, select, textarea'),
+					dependency_list = input.data('dependency_list') || [],
+					dependencies = [];
 				$.each(dependency_list, function(i, field_name) {
 					dependencies.push('#' + row.find('.field-' + field_name).find('input, select, textarea').attr('id'));
 				});
@@ -173,7 +176,10 @@
 
 		var initPrepopulatedFields = function(row) {
 			row.find('.prepopulated_field').each(function() {
-				var field = $(this), input = field.find('input, select, textarea'), dependency_list = input.data('dependency_list') || [], dependencies = [];
+				var field = $(this),
+					input = field.find('input, select, textarea'),
+					dependency_list = input.data('dependency_list') || [],
+					dependencies = [];
 				$.each(dependency_list, function(i, field_name) {
 					dependencies.push('#' + row.find('.form-row .field-' + field_name).find('input, select, textarea').attr('id'));
 				});
@@ -209,18 +215,18 @@
 	function create_nested_formsets(parentPrefix, rowId) {
 		// we use the first formset as template. so replace every index by 0
 		var sourceParentPrefix = parentPrefix.replace(/[-][0-9][-]/g, "-0-");
-		
+
 		var row_prefix = parentPrefix+'-'+rowId;
 		var row = $('#'+row_prefix);
-		
+
 		// Check if the form should have nested formsets
 		// This is horribly hackish. It tries to collect one set of nested inlines from already existing rows and clone these
-		
+
 
 		// not sure why, but the nextUntil will frequently break the search_space
-		// var search_space = $("#"+sourceParentPrefix+'-0').nextUntil("."+sourceParentPrefix + "-not-nested");
-		var search_space = $("#"+sourceParentPrefix+'-0');
-		
+		var search_space = $("#"+sourceParentPrefix+'-0').nextUntil("."+sourceParentPrefix + "-not-nested");
+		//var search_space = $("#"+sourceParentPrefix+'-0');
+
 		//all nested inlines
 		var nested_inlines = search_space.find("." + sourceParentPrefix + "-nested-inline");
 		nested_inlines.each(function(index) {
@@ -231,15 +237,15 @@
 			// = "parent_formset_prefix"-"next_form_id"-"nested_inline_name"_set
 			// Find the normalized formset and clone it
 			var template = $(this).clone();
-			
+
 			//get the options that were used to create the source formset
 			var options = $(this).data('django_formset');
 			//clone, so that we don't modify the old one
 			options = $.extend({}, options);
 			options.prefix = formset_prefix;
-			
+
 			var isTabular = template.find('#'+normalized_formset_prefix+'-empty').is('tr');
-			
+
 			//remove all existing rows from the clone
 			if (isTabular) {
 				//tabular
@@ -251,7 +257,7 @@
 			}
 			//remove other unnecessary things
 			template.find('.'+options.addCssClass).remove();
-			
+
 			//replace the cloned prefix with the new one
 			update_props(template, normalized_formset_prefix, formset_prefix);
 			//reset update formset management variables
@@ -259,8 +265,8 @@
 			template.find('#id_' + formset_prefix + '-TOTAL_FORMS').val(0);
 			//remove the fk and id values, because these don't exist yet
 			template.find('.original').empty();
-			
-			
+
+
 
 			//postprocess stacked/tabular
 			if (isTabular) {
@@ -271,17 +277,17 @@
 				row.after(wrapped);
 			} else {
 				var formset = template.find(".inline-related").stackedFormset(options);
-				
+
 				row.after(template);
 			}
-			
+
 			//add a empty row. This will in turn create the nested formsets
 			addRow(options);
 		});
-		
+
 		return nested_inlines.length;
 	};
-	
+
 
 	function update_props(template, normalized_formset_prefix, formset_prefix) {
 		// Fix template id
@@ -300,18 +306,19 @@
 				this.name = this.name.replace(normalized_formset_prefix, formset_prefix);
 			}
 		});
-		
+
 	};
 
 	// This returns the amount of forms in the given formset
 	function get_no_forms(formset_prefix) {
-		formset_prop = $("#id_" + formset_prefix + "-TOTAL_FORMS")
+		var formset_prop = $("#id_" + formset_prefix + "-TOTAL_FORMS");
 		if (!formset_prop.length) {
 			return 0;
 		}
-		return parseInt(formset_prop.attr("autocomplete", "off").val());
+		return parseInt(formset_prop.attr("autocomplete", "off").val(), 10);
 	}
 
+	// This changes the amount of forms in the given formset
 	function change_no_forms(formset_prefix, increase) {
 		var no_forms = get_no_forms(formset_prefix);
 		if (increase) {
@@ -329,13 +336,13 @@
 		}
 		return parseInt(max_forms);
 	};
-	
+
 	function addRow(options) {
 		var nextIndex = get_no_forms(options.prefix);
-		
+
 		var row = insertNewRow(options.prefix, options);
 
-		updateAddButton(options.prefix);
+		updateAddButton(options);
 
 		// Add delete button handler
 		row.find("a." + options.deleteCssClass).click(function(e) {
@@ -355,8 +362,10 @@
 				options.removed(formset_to_update);
 			}
 
+                    updateAddButton(options);
+
 		});
-		
+
 		var num_formsets = create_nested_formsets(options.prefix, nextIndex);
 		if(row.is("tr") && num_formsets > 0) {
 			row.addClass("no-bottom-border");
@@ -369,7 +378,7 @@
 
 		nextIndex = nextIndex + 1;
 	};
-	
+
 	function insertNewRow(prefix, options) {
 		var template = $("#" + prefix + "-empty");
 		var nextIndex = get_no_forms(prefix);
@@ -381,10 +390,10 @@
 
 		// Update number of total forms
 		change_no_forms(prefix, true);
-		
+
 		return row;
 	};
-	
+
 	function prepareRowTemplate(template, prefix, index, options) {
 		var row = template.clone(true);
 		row.removeClass(options.emptyCssClass).addClass(options.formCssClass).attr("id", prefix + "-" + index);
@@ -406,7 +415,7 @@
 		});
 		return row;
 	};
-	
+
 	function updateElementIndex(el, prefix, ndx) {
 		var id_regex = new RegExp("(" + prefix + "-(\\d+|__prefix__))");
 		var replacement = prefix + "-" + ndx;
@@ -420,7 +429,7 @@
 			el.name = el.name.replace(id_regex, replacement);
 		}
 	};
-	
+
 	/** show or hide the addButton **/
 	function updateAddButton(options) {
 		// Hide add button in case we've hit the max, except we want to add infinitely
@@ -431,7 +440,7 @@
 			btn.hide();
 		}
 	}
-	
+
 	function isAddButtonVisible(options) {
 		return !(get_max_forms(options.prefix) !== '' && (get_max_forms(options.prefix) - get_no_forms(options.prefix)) <= 0);
 	}
